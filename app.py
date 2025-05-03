@@ -1,12 +1,14 @@
-
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import time
 
-headers = {'user-agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.5013882 Safari/537.36'}
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                  '(KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36'
+}
 
-urls =[
+urls = [
     'https://groww.in/us-stocks/nke',
     'https://groww.in/us-stocks/ko',
     'https://groww.in/us-stocks/msft',
@@ -28,48 +30,79 @@ urls =[
     'https://groww.in/us-stocks/dis'
 ]
 
-
 def get_stock_data(url):
     try:
-        response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        # Company name
-        company = soup.find('h1', {'class': 'usph14Head displaySmall'})
-        if company:
-            company = company.text.strip()
-        else:
-            company = "N/A"
+        # Company Name
+        company_tag = soup.find('h1')
+        company = company_tag.text.strip() if company_tag else 'N/A'
 
-        # Price (handle duplicate class)
-        price_tags = soup.find_all('span', {'class': 'uht141Pri contentPrimary displayBase'})
-        price= price_tags[0].text.strip() if price_tags else "N/A"
+        # Price
+        price_tag = soup.find('span', {'class': 'uht141Pri'})
+        price = price_tag.text.strip() if price_tag else 'N/A'
 
-        # Change (%)
-        change_tags = soup.find_all('span', {'class': 'uht141Day bodyBaseHeavy contentNegative'})
-        if not change_tags:
-            # Try positive class
-         change_tags = soup.find_all('span', {'class': 'uht141Day bodyBaseHeavy contentPositive'})
-         change = change_tags[0].text.strip() if change_tags else "N/A"
+        # Change
+        change_tag = soup.find('span', {'class': ['contentNegative', 'contentPositive']})
+        change = change_tag.text.strip() if change_tag else 'N/A'
 
-         # Volume
-        volume_table = soup.find('table', {'class': 'tb10Table col l5'})
-        volume = volume_table.find_all('td')[1].text.strip() if volume_table else "N/A"
+        # Initialize metrics dictionary
+        metrics = {
+            'Volume': 'N/A',
+            'Market Cap': 'N/A',
+            'P/E Ratio': 'N/A',
+            'Dividend Yield': 'N/A',
+            '52W High': 'N/A',
+            '52W Low': 'N/A',
+            'EPS': 'N/A',
+            'ROE': 'N/A',
+            'P/B Ratio': 'N/A',
+            'Debt to Equity': 'N/A',
+            'Face Value': 'N/A'
+        }
+
+        # Parse tables for financial metrics
+        tables = soup.find_all('table')
+        for table in tables:
+            rows = table.find_all('tr')
+            for row in rows:
+                cols = row.find_all('td')
+                if len(cols) >= 2:
+                    label = cols[0].text.strip()
+                    value = cols[1].text.strip()
+                    for key in metrics.keys():
+                        if key.lower() in label.lower():
+                            metrics[key] = value
 
         return {
             'Company': company,
             'Price': price,
             'Change': change,
-            'Volume': volume,
+            **metrics,
             'URL': url
-         }
-    except Exception as e:
-      print(f"Error scraping {url}: {e}")
-    return None
+        }
 
-# Loop through URLs
+    except Exception as e:
+        print(f"Error scraping {url}: {e}")
+        return None
+
+# Collect all data
+all_data = []
+
 for url in urls:
-    data = get_stock_data(url)
-    if data:
-        print(data)
-        print('-' * 50)
+    print(f"Scraping: {url}")
+    stock_data = get_stock_data(url)
+    if stock_data:
+        all_data.append(stock_data)
+    time.sleep(2)  # polite delay
+
+# Create and display the DataFrame
+df = pd.DataFrame(all_data)
+
+print("\nScraped Stock Data:\n")
+print(df.to_string(index=False))
+
+
+
