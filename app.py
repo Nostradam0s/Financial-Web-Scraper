@@ -104,5 +104,8 @@ df = pd.DataFrame(all_data)
 print("\nScraped Stock Data:\n")
 print(df.to_string(index=False))
 
+print("\nScraped Stock Data:\n")
+print(df.to_string(index=False))
+
 
 
